@@ -1,11 +1,7 @@
-.DEFAULT_GOAL := myfind.c
-
 all: myfind
 
-myfind.c: 
-	gcc -o ./myfind.out ./myfind.c
+myfind: myfind.c
+	gcc -std=c11 -Wall -Wextra -o myfind myfind.c
 
-run: myfind.c
-	./myfind.out .
 clean:
-	rm -f myfind.out
+	rm -f myfind
