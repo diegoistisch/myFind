@@ -3,7 +3,7 @@
 all: myfind
 
 myfind.c: 
-	gcc -o myfind.out myfind.c
+	gcc -o ./myfind.out ./myfind.c
 
 run: myfind.c
 	./myfind.out .
