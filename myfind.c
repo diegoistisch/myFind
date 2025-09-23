@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <sys/stat.h>
+#include <sys/stat.h>
 
 static void usage(const char *prog) {
     fprintf(stderr, "Usage: %s [-R] [-i] searchpath filename1 [filename2 ...]\n", prog);
@@ -72,6 +73,7 @@ int main(int argc, char **argv)
         
         default:
             usage(argv[0]);
+            usage(argv[0]);
             return 1;
         }
     }
@@ -82,6 +84,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    //Debug Output
     //Debug Output
     const char *searchpath = argv[optind];
     fprintf(stderr, "OK: searchpath='%s', files=%d, -R=%d, -i=%d\n",
