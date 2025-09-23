@@ -23,6 +23,7 @@ void search_files(const char *dirpath, char **filenames, int num_files, bool cas
 
     struct dirent *direntp;
     while ((direntp = readdir(dirp)) != NULL) {
+        
         if (strcmp(direntp->d_name, ".") == 0 || strcmp(direntp->d_name, "..") == 0)
             continue;
 
@@ -43,9 +44,10 @@ void search_files(const char *dirpath, char **filenames, int num_files, bool cas
 
         if (recursive) {
             struct stat statbuf;
-            if (stat(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) {
-                search_files(full_path, filenames, num_files, case_insensitive, recursive);
-            }
+                if (stat(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) {
+                    search_files(full_path, filenames, num_files, case_insensitive, recursive);
+                }
+
         }
     }
     closedir(dirp);
@@ -73,7 +75,7 @@ int main(int argc, char **argv)
             return 1;
         }
     }
-
+    
     int remaining = argc - optind;
     if (remaining < 2) {
         usage(argv[0]);
@@ -94,7 +96,16 @@ int main(int argc, char **argv)
     char **filenames = &argv[optind + 1];
     int num_files = argc - optind - 1;
 
+    for (int i = optind; i < argc; ++i) {
+        if(fork() == 0) {
+            // child process
+            // do something with argv[i]
+            printf("%d : %s : %s\n", getpid(), filenames[i], absolute_searchpath);
+            exit(0); // terminate child process
+        }
+    }
     search_files(absolute_searchpath, filenames, num_files, modeCaseInsensitive, modeRecursive);
-
+    
+    
     return 0;
 }
