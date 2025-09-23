@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <strings.h>
 #include <errno.h>
+#include <limits.h>
 
 static void usage(const char *prog) {
     fprintf(stderr, "Usage: %s [-R] [-i] searchpath filename1 [filename2 ...]\n", prog);
@@ -45,6 +46,12 @@ int main(int argc, char **argv)
     fprintf(stderr, "OK: searchpath='%s', files=%d, -R=%d, -i=%d\n",
             searchpath, argc - optind - 1, modeRecursive, modeCaseInsensitive);
 
+    char absolute_searchpath[PATH_MAX];
+    if (realpath(searchpath, absolute_searchpath) == NULL) {
+        perror("Failed to resolve absolute path");
+        return 1;
+    }
+
     DIR *dirp = opendir(searchpath);
     if (dirp == NULL) {
         perror("Failed to open directory");
@@ -65,7 +72,7 @@ int main(int argc, char **argv)
                 match = (strcmp(direntp->d_name, argv[i]) == 0);
             }
             if (match) {
-                printf("%s/%s\n", searchpath, direntp->d_name);
+                printf("%s/%s\n", absolute_searchpath, direntp->d_name);
             }
         }
     }
