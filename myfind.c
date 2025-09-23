@@ -8,6 +8,7 @@
 #include <strings.h>
 #include <errno.h>
 #include <limits.h>
+#include <sys/wait.h>
 
 static void usage(const char *prog) {
     fprintf(stderr, "Usage: %s [-R] [-i] searchpath filename1 [filename2 ...]\n", prog);
@@ -41,16 +42,17 @@ int main(int argc, char **argv)
         usage(argv[0]);
         return 1;
     }
+    
+        const char *searchpath = argv[optind];
+        fprintf(stderr, "OK: searchpath='%s', files=%d, -R=%d, -i=%d\n",
+                searchpath, argc - optind - 1, modeRecursive, modeCaseInsensitive);
 
-    const char *searchpath = argv[optind];
-    fprintf(stderr, "OK: searchpath='%s', files=%d, -R=%d, -i=%d\n",
-            searchpath, argc - optind - 1, modeRecursive, modeCaseInsensitive);
-
-    char absolute_searchpath[PATH_MAX];
-    if (realpath(searchpath, absolute_searchpath) == NULL) {
-        perror("Failed to resolve absolute path");
-        return 1;
-    }
+        char absolute_searchpath[PATH_MAX];
+        if (realpath(searchpath, absolute_searchpath) == NULL) {
+            perror("Failed to resolve absolute path");
+            return 1;
+        }
+    
 
     DIR *dirp = opendir(searchpath);
     if (dirp == NULL) {
@@ -63,20 +65,23 @@ int main(int argc, char **argv)
     while ((direntp = readdir(dirp)) != NULL) {
         if (strcmp(direntp->d_name, ".") == 0 || strcmp(direntp->d_name, "..") == 0)
             continue;
-
-        for (int i = optind + 1; i < argc; ++i) {
-            int match;
-            if (modeCaseInsensitive) {
-                match = (strcasecmp(direntp->d_name, argv[i]) == 0);
-            } else {
-                match = (strcmp(direntp->d_name, argv[i]) == 0);
+        if(fork() == 0){
+            for (int i = optind + 1; i < argc; ++i) {
+                int match;
+                if (modeCaseInsensitive) {
+                    match = (strcasecmp(direntp->d_name, argv[i]) == 0);
+                } else {
+                    match = (strcmp(direntp->d_name, argv[i]) == 0);
+                }
+                if (match) {
+                    printf("%s/%s\n", absolute_searchpath, direntp->d_name);
+                }
             }
-            if (match) {
-                printf("%s/%s\n", absolute_searchpath, direntp->d_name);
-            }
-        }
+        }else{
+        wait(NULL);
+        exit(0);
+        }    
     }
     closedir(dirp);
-
     return 0;
 }
