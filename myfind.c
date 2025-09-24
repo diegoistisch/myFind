@@ -82,6 +82,7 @@ int main(int argc, char **argv)
 
     const char *searchpath = argv[optind];
     char absolute_searchpath[PATH_MAX];
+    
     if (realpath(searchpath, absolute_searchpath) == NULL) {
         perror("Failed to resolve absolute path");
         return 1;
@@ -90,7 +91,7 @@ int main(int argc, char **argv)
     char **filenames = &argv[optind + 1];
     int num_files = argc - optind - 1;
 
-    // Child processes
+    // For schleife um für jede datei einen kindprozess zu erstellen
     for (int i = 0; i < num_files; i++) {
         if (fork() == 0) {
             search_files(absolute_searchpath, filenames[i], modeCaseInsensitive, modeRecursive);
@@ -98,9 +99,9 @@ int main(int argc, char **argv)
         }
     }
 
-    // Parent process
+    // Elternprozess
     for (int i = 0; i < num_files; i++) {
-        wait(NULL);
+        wait(NULL); //Wartet auf alle Kindprozesse um keine Zombies zu erzeugen
     }
 
     return 0;
