@@ -11,10 +11,12 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+// Hilfsfunktion zur Anzeige der Benutzung
 static void usage(const char *prog) {
     fprintf(stderr, "Usage: %s [-R] [-i] searchpath filename1 [filename2 ...]\n", prog);
 }
 
+// Funktion zum Durchsuchen von Verzeichnissen
 void search_files(const char *dirpath, const char *filename, bool case_insensitive, bool recursive) {
     DIR *dirp = opendir(dirpath);
     if (dirp == NULL) {
@@ -22,15 +24,19 @@ void search_files(const char *dirpath, const char *filename, bool case_insensiti
         return;
     }
 
+    // Verzeichnisinhalt durchgehen
     struct dirent *direntp;
+    
     while ((direntp = readdir(dirp)) != NULL) {
-
+        // Überspringen von "." und ".."
         if (strcmp(direntp->d_name, ".") == 0 || strcmp(direntp->d_name, "..") == 0)
             continue;
+
 
         char full_path[PATH_MAX];
         snprintf(full_path, sizeof(full_path), "%s/%s", dirpath, direntp->d_name);
 
+        // Dateinamenvergleich (davor schauen ob case insensitive)
         int match;
         if (case_insensitive) {
             match = (strcasecmp(direntp->d_name, filename) == 0);
@@ -41,6 +47,7 @@ void search_files(const char *dirpath, const char *filename, bool case_insensiti
             printf("%d: %s: %s\n", getpid(), filename, full_path);
         }
 
+        // Rekursive Suche in Unterverzeichnissen
         if (recursive) {
             struct stat statbuf;
             if (stat(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) {
@@ -53,10 +60,11 @@ void search_files(const char *dirpath, const char *filename, bool case_insensiti
 
 int main(int argc, char **argv)
 {
-    int opt;
+    int opt;    
     bool modeRecursive = false;
     bool modeCaseInsensitive = false;
 
+    //abfrage der optionen -R und -i
     while ((opt = getopt(argc, argv, "Ri")) != -1)
     {
         switch (opt)
@@ -73,23 +81,24 @@ int main(int argc, char **argv)
             return 1;
         }
     }
-    
+
+    // Überprüfen, ob genügend Argumente vorhanden sind
     int remaining = argc - optind;
     if (remaining < 2) {
         usage(argv[0]);
         return 1;
     }
 
-    const char *searchpath = argv[optind];
-    char absolute_searchpath[PATH_MAX];
-    
+    const char *searchpath = argv[optind];  // Suchpfad pointer
+    char absolute_searchpath[PATH_MAX];     // Absoluter Pfad des Suchpfads
+
     if (realpath(searchpath, absolute_searchpath) == NULL) {
         perror("Failed to resolve absolute path");
         return 1;
     }
-
-    char **filenames = &argv[optind + 1];
-    int num_files = argc - optind - 1;
+  
+    char **filenames = &argv[optind + 1];   // Array der Dateinamen
+    int num_files = argc - optind - 1; // Anzahl der Dateinamen
 
     // For schleife um für jede datei einen kindprozess zu erstellen
     for (int i = 0; i < num_files; i++) {
