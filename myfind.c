@@ -17,7 +17,7 @@ static void usage(const char *prog) {
 }
 
 // Funktion zum Durchsuchen von Verzeichnissen
-void search_files(const char *dirpath, const char *filename, bool case_insensitive, bool recursive, int fd) {
+void search_files(const char *dirpath, const char *filename, bool case_insensitive, bool recursive, FILE *writing) {
     DIR *dirp = opendir(dirpath);
     if (dirp == NULL) {
         perror("Failed to open directory");
@@ -26,7 +26,7 @@ void search_files(const char *dirpath, const char *filename, bool case_insensiti
 
     // Verzeichnisinhalt durchgehen
     struct dirent *direntp;
-    
+
     while ((direntp = readdir(dirp)) != NULL) {
         // Überspringen von "." und ".."
         if (strcmp(direntp->d_name, ".") == 0 || strcmp(direntp->d_name, "..") == 0)
@@ -44,16 +44,15 @@ void search_files(const char *dirpath, const char *filename, bool case_insensiti
             match = (strcmp(direntp->d_name, filename) == 0);
         }
         if (match) {
-            char result[PATH_MAX + 100];
-            snprintf(result, sizeof(result), "%d: %s: %s\n", getpid(), filename, full_path);
-            write(fd, result, strlen(result));
+            fprintf(writing, "%d: %s: %s\n", getpid(), filename, full_path);
+            fflush(writing);
         }
 
         // Rekursive Suche in Unterverzeichnissen
         if (recursive) {
             struct stat statbuf;
             if (stat(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) {
-                search_files(full_path, filename, case_insensitive, recursive, fd);
+                search_files(full_path, filename, case_insensitive, recursive, writing);
             }
         }
     }
@@ -115,23 +114,36 @@ int main(int argc, char **argv)
         if (fork() == 0) {
             // Kindprozess: Schreibende Seite der Pipe verwenden
             close(fd[0]); // Lesende Seite schließen
-            search_files(absolute_searchpath, filenames[i], modeCaseInsensitive, modeRecursive, fd[1]);
-            close(fd[1]); // Schreibende Seite schließen
-            exit(0);
+
+            FILE *writing = fdopen(fd[1], "w");
+            if (writing == NULL) {
+                perror("fdopen");
+                exit(EXIT_FAILURE);
+            }
+
+            search_files(absolute_searchpath, filenames[i], modeCaseInsensitive, modeRecursive, writing);
+            fclose(writing); // Schließt auch fd[1]
+            exit(EXIT_SUCCESS);
         }
     }
 
     // Elternprozess: Schreibende Seite schließen
     close(fd[1]);
 
-    // Elternprozess: Ergebnisse von der Pipe lesen bis alle Kinder fertig sind
-    char buffer[4096];
-    ssize_t bytes_read;
-    while ((bytes_read = read(fd[0], buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[bytes_read] = '\0';
-        printf("%s", buffer);
+    // FILE-Pointer für lesende Seite erstellen
+    FILE *reading = fdopen(fd[0], "r");
+    if (reading == NULL) {
+        perror("fdopen");
+        return 1;
     }
-    close(fd[0]); // Lesende Seite schließen
+
+    // Elternprozess: Ergebnisse von der Pipe lesen bis alle Kinder fertig sind
+    char buffer[PIPE_BUF];
+    while (fgets(buffer, PIPE_BUF, reading) != NULL) {
+        fputs(buffer, stdout);
+        fflush(stdout);
+    }
+    fclose(reading); // Schließt auch fd[0]
 
     // Wartet auf alle Kindprozesse um keine Zombies zu erzeugen
     for (int i = 0; i < num_files; i++) {
