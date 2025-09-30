@@ -120,22 +120,22 @@ int main(int argc, char **argv)
     // For schleife um für jede datei einen kindprozess zu erstellen
     for (int i = 0; i < num_files; i++) {
         if (fork() == 0) {
-            // Kindprozess 
+            // Kindprozess
             if (close(fd[0]) == -1) { // Lesende Seite schließen
                 perror("close");
-                exit(EXIT_FAILURE);
+                exit(1);
             }
 
             // Schreibende Seite der Pipe verwenden
             FILE *writing = fdopen(fd[1], "w");
             if (writing == NULL) {
                 perror("fdopen");
-                exit(EXIT_FAILURE);
+                exit(1);
             }
 
             search_files(absolute_searchpath, filenames[i], modeCaseInsensitive, modeRecursive, writing);
             fclose(writing); // Schließt auch fd[1]
-            exit(EXIT_SUCCESS);
+            exit(0);
         }
     }
 
