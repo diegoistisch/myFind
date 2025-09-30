@@ -58,7 +58,12 @@ void search_files(const char *dirpath, const char *filename, bool case_insensiti
     }
     closedir(dirp);
 }
-
+/**
+ * Synchronisation der Kindprozesse über eine Pipe
+ * Jeder Kindprozess schreibt seine Ergebnisse in die Pipe
+ * Der Elternprozess liest die Ergebnisse aus der Pipe mit fgets
+ * und gibt sie aus mit fputs und fflush(stdout)
+ */
 int main(int argc, char **argv)
 {
     int opt;    
@@ -140,8 +145,8 @@ int main(int argc, char **argv)
     // Elternprozess: Ergebnisse von der Pipe lesen bis alle Kinder fertig sind
     char buffer[PIPE_BUF];
     while (fgets(buffer, PIPE_BUF, reading) != NULL) {
-        fputs(buffer, stdout);
-        fflush(stdout);
+        fputs(buffer, stdout); //text in buffer
+        fflush(stdout);     // leert den buffer (sofortige Ausgabe)
     }
     fclose(reading); // Schließt auch fd[0]
 
