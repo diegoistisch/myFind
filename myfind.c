@@ -17,7 +17,7 @@ static void usage(const char *prog) {
 }
 
 // Funktion zum Durchsuchen von Verzeichnissen
-void search_files(const char *dirpath, const char *filename, bool case_insensitive, bool recursive, int pipe_fd) {
+void search_files(const char *dirpath, const char *filename, bool case_insensitive, bool recursive, int fd) {
     DIR *dirp = opendir(dirpath);
     if (dirp == NULL) {
         perror("Failed to open directory");
@@ -46,14 +46,14 @@ void search_files(const char *dirpath, const char *filename, bool case_insensiti
         if (match) {
             char result[PATH_MAX + 100];
             snprintf(result, sizeof(result), "%d: %s: %s\n", getpid(), filename, full_path);
-            write(pipe_fd, result, strlen(result));
+            write(fd, result, strlen(result));
         }
 
         // Rekursive Suche in Unterverzeichnissen
         if (recursive) {
             struct stat statbuf;
             if (stat(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) {
-                search_files(full_path, filename, case_insensitive, recursive, pipe_fd);
+                search_files(full_path, filename, case_insensitive, recursive, fd);
             }
         }
     }
@@ -91,9 +91,10 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    const char *searchpath = argv[optind];  // Suchpfad pointer
-    char absolute_searchpath[PATH_MAX];     // Absoluter Pfad des Suchpfads
+    const char *searchpath = argv[optind];  // Suchpfad speichern
+    char absolute_searchpath[PATH_MAX];     // Puffer für den Suchpfad
 
+    // realpath wandelt den pfad in einen standardisierten, absoluten pfad um
     if (realpath(searchpath, absolute_searchpath) == NULL) {
         perror("Failed to resolve absolute path");
         return 1;
@@ -103,8 +104,8 @@ int main(int argc, char **argv)
     int num_files = argc - optind - 1; // Anzahl der Dateinamen
 
     // Eine gemeinsame Pipe für alle Kindprozesse erstellen
-    int pipe_fd[2];
-    if (pipe(pipe_fd) == -1) {
+    int fd[2];
+    if (pipe(fd) < 0) {
         perror("pipe failed");
         return 1;
     }
@@ -113,24 +114,24 @@ int main(int argc, char **argv)
     for (int i = 0; i < num_files; i++) {
         if (fork() == 0) {
             // Kindprozess: Schreibende Seite der Pipe verwenden
-            close(pipe_fd[0]); // Lesende Seite schließen
-            search_files(absolute_searchpath, filenames[i], modeCaseInsensitive, modeRecursive, pipe_fd[1]);
-            close(pipe_fd[1]); // Schreibende Seite schließen
+            close(fd[0]); // Lesende Seite schließen
+            search_files(absolute_searchpath, filenames[i], modeCaseInsensitive, modeRecursive, fd[1]);
+            close(fd[1]); // Schreibende Seite schließen
             exit(0);
         }
     }
 
     // Elternprozess: Schreibende Seite schließen
-    close(pipe_fd[1]);
+    close(fd[1]);
 
     // Elternprozess: Ergebnisse von der Pipe lesen bis alle Kinder fertig sind
     char buffer[4096];
     ssize_t bytes_read;
-    while ((bytes_read = read(pipe_fd[0], buffer, sizeof(buffer) - 1)) > 0) {
+    while ((bytes_read = read(fd[0], buffer, sizeof(buffer) - 1)) > 0) {
         buffer[bytes_read] = '\0';
         printf("%s", buffer);
     }
-    close(pipe_fd[0]); // Lesende Seite schließen
+    close(fd[0]); // Lesende Seite schließen
 
     // Wartet auf alle Kindprozesse um keine Zombies zu erzeugen
     for (int i = 0; i < num_files; i++) {
