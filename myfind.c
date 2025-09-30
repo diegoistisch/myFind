@@ -36,7 +36,7 @@ void search_files(const char *dirpath, const char *filename, bool case_insensiti
         char full_path[PATH_MAX];
         snprintf(full_path, sizeof(full_path), "%s/%s", dirpath, direntp->d_name);
 
-        // Dateinamenvergleich (davor schauen ob case insensitive)
+        // Dateinamenvergleich
         int match;
         if (case_insensitive) {
             match = (strcasecmp(direntp->d_name, filename) == 0);
@@ -56,8 +56,11 @@ void search_files(const char *dirpath, const char *filename, bool case_insensiti
             }
         }
     }
-    closedir(dirp);
+
+    // closedir() wiederholen falls durch Signal unterbrochen
+    while ((closedir(dirp) == -1) && (errno == EINTR));
 }
+
 /**
  * Synchronisation der Kindprozesse über eine Pipe
  * Jeder Kindprozess schreibt seine Ergebnisse in die Pipe
@@ -100,7 +103,7 @@ int main(int argc, char **argv)
 
     // realpath wandelt den pfad in einen standardisierten, absoluten pfad um
     if (realpath(searchpath, absolute_searchpath) == NULL) {
-        perror("Failed to resolve absolute path");
+        perror("Failed to get absolute path");
         return 1;
     }
   
@@ -117,9 +120,13 @@ int main(int argc, char **argv)
     // For schleife um für jede datei einen kindprozess zu erstellen
     for (int i = 0; i < num_files; i++) {
         if (fork() == 0) {
-            // Kindprozess: Schreibende Seite der Pipe verwenden
-            close(fd[0]); // Lesende Seite schließen
+            // Kindprozess 
+            if (close(fd[0]) == -1) { // Lesende Seite schließen
+                perror("close");
+                exit(EXIT_FAILURE);
+            }
 
+            // Schreibende Seite der Pipe verwenden
             FILE *writing = fdopen(fd[1], "w");
             if (writing == NULL) {
                 perror("fdopen");
@@ -132,8 +139,12 @@ int main(int argc, char **argv)
         }
     }
 
-    // Elternprozess: Schreibende Seite schließen
-    close(fd[1]);
+    // Elternprozess 
+    // Schreibende Seite schließen
+    if (close(fd[1]) == -1) {
+        perror("close");
+        return 1;
+    }
 
     // FILE-Pointer für lesende Seite erstellen
     FILE *reading = fdopen(fd[0], "r");
@@ -142,7 +153,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Elternprozess: Ergebnisse von der Pipe lesen bis alle Kinder fertig sind
+    // Elternprozess
+    // Liest Ergebnisse von der Pipe bis alle Kinder fertig sind
     char buffer[PIPE_BUF];
     while (fgets(buffer, PIPE_BUF, reading) != NULL) {
         fputs(buffer, stdout); //text in buffer
